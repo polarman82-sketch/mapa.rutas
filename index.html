@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#00e5ff">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="RouteTrace">
+<link rel="manifest" href="manifest.json">
+<title>RouteTrace</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:opsz,wght@9..40,300;9..40,500;9..40,700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0a0e17;--surface:#111827;--surface2:#1a2235;--border:#1f2d45;
+  --accent:#00e5ff;--stop:#ff6b35;--go:#7cfc00;--end:#ff3366;--text:#e8edf5;--muted:#5a6a82;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100dvh;overflow:hidden;background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;display:flex;flex-direction:column}
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;z-index:1000}
+.logo{font-family:'Space Mono',monospace;font-size:15px;font-weight:700;color:var(--accent)}.logo span{color:var(--text)}
+.hstats{font-size:11px;color:var(--muted);font-family:'Space Mono',monospace;display:flex;gap:10px}.hstats b{color:var(--accent)}
+.tabs{display:flex;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0}
+.tab{flex:1;padding:9px 8px;text-align:center;font-size:11px;font-weight:500;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;transition:all .2s}
+.tab .ti{font-size:15px;display:block;margin-bottom:1px}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent);background:rgba(0,229,255,.04)}
+.panel{display:none;flex:1;overflow:hidden;flex-direction:column;min-height:0}.panel.active{display:flex}
+.upload-panel{padding:16px;overflow-y:auto;gap:12px}
+.drop-zone{border:2px dashed var(--border);border-radius:16px;padding:32px 16px;text-align:center;cursor:pointer;background:var(--surface);transition:all .3s;position:relative;overflow:hidden}
+.drop-zone::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 50% 50%,rgba(0,229,255,.07),transparent 70%);opacity:0;transition:opacity .3s}
+.drop-zone:hover::before,.drop-zone.drag-over::before{opacity:1}
+.drop-zone:hover,.drop-zone.drag-over{border-color:var(--accent)}
+.di{font-size:40px;margin-bottom:10px}.dt{font-size:15px;font-weight:700;margin-bottom:5px}.ds{font-size:12px;color:var(--muted)}
+.dh{margin-top:12px;font-size:11px;font-family:'Space Mono',monospace;color:var(--accent);background:rgba(0,229,255,.08);border-radius:6px;padding:5px 10px;display:inline-block}
+input[type=file]{display:none}
+.file-info{background:rgba(0,229,255,.07);border:1px solid rgba(0,229,255,.2);border-radius:10px;padding:11px 13px;font-size:12px;display:flex;align-items:center;gap:10px}
+.fi-icon{font-size:22px}.fi-name{font-weight:700;color:var(--accent)}.fi-meta{color:var(--muted);font-family:'Space Mono',monospace;font-size:11px}
+.mapper-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px;animation:su .3s ease}
+@keyframes su{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.mt{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;margin-top:12px}.mt:first-child{margin-top:0}
+.mgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.fg label{display:block;font-size:10px;color:var(--muted);margin-bottom:4px;font-family:'Space Mono',monospace}
+select,input[type=number]{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 10px;font-size:12px;font-family:'DM Sans',sans-serif;outline:none;transition:border-color .2s;appearance:none}
+select:focus,input[type=number]:focus{border-color:var(--accent)}
+.detect-info{font-size:11px;color:var(--accent);line-height:1.8;margin-bottom:8px;padding:8px 10px;background:rgba(0,229,255,.06);border-radius:8px;border:1px solid rgba(0,229,255,.15)}
+.btn-primary{width:100%;background:var(--accent);color:#000;border:none;border-radius:12px;padding:13px;font-size:14px;font-weight:700;cursor:pointer;transition:all .2s;font-family:'Space Mono',monospace;flex-shrink:0}
+.btn-primary:active{transform:scale(.98)}.btn-primary:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.map-panel{position:relative}
+#map{width:100%;height:100%;z-index:1}
+.map-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:10px;color:var(--muted)}
+.map-empty-icon{font-size:52px;opacity:.35}.map-empty-text{font-size:13px;text-align:center;line-height:1.6;max-width:220px}
+.map-info-bar{position:absolute;top:10px;left:10px;z-index:1000;background:rgba(10,14,23,.88);border:1px solid var(--border);border-radius:9px;padding:6px 11px;font-size:11px;font-family:'Space Mono',monospace;color:var(--muted);backdrop-filter:blur(6px)}
+.map-info-bar b{color:var(--accent)}
+.leaflet-container{background:#1a2235!important;font-family:'DM Sans',sans-serif}
+.leaflet-control-zoom{border:1px solid var(--border)!important;border-radius:10px!important;overflow:hidden}
+.leaflet-control-zoom a{background:var(--surface)!important;color:var(--text)!important;border:none!important;width:34px!important;height:34px!important;line-height:34px!important;font-size:18px!important}
+.leaflet-control-zoom a:hover{background:var(--surface2)!important;color:var(--accent)!important}
+.leaflet-popup-content-wrapper{background:var(--surface)!important;color:var(--text)!important;border:1px solid var(--stop)!important;border-radius:10px!important;box-shadow:0 4px 20px rgba(0,0,0,.5)!important}
+.leaflet-popup-tip{background:var(--stop)!important}
+.leaflet-popup-content{font-size:12px;line-height:1.7;margin:10px 14px}
+.popup-title{font-family:'Space Mono',monospace;font-size:13px;font-weight:700;color:var(--stop);margin-bottom:4px}
+.popup-row{color:var(--muted)}.popup-row b{color:var(--text)}
+.stops-panel{overflow-y:auto;padding:14px;gap:9px}
+.stops-summary{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:13px;display:grid;grid-template-columns:repeat(3,1fr);gap:6px;flex-shrink:0}
+.sc{text-align:center}.sv{font-family:'Space Mono',monospace;font-size:19px;font-weight:700;color:var(--accent)}.sl{font-size:10px;color:var(--muted);margin-top:2px}
+.stop-card{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:12px 13px;display:flex;gap:11px;align-items:flex-start;cursor:pointer;transition:all .2s;animation:su .3s ease both;flex-shrink:0}
+.stop-card:hover{border-color:var(--stop);transform:translateX(2px)}
+.snum{width:30px;height:30px;background:rgba(255,107,53,.12);border:1px solid var(--stop);border-radius:7px;display:flex;align-items:center;justify-content:center;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;color:var(--stop);flex-shrink:0}
+.sinfo{flex:1;min-width:0}.scoords{font-family:'Space Mono',monospace;font-size:11px;color:var(--accent);margin-bottom:3px}
+.smeta{font-size:11px;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap}.smeta b{color:var(--text)}
+.sbadge{font-size:10px;font-family:'Space Mono',monospace;padding:2px 6px;border-radius:4px;background:rgba(255,107,53,.12);color:var(--stop);border:1px solid rgba(255,107,53,.3);align-self:flex-start;flex-shrink:0}
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;height:180px;color:var(--muted);gap:8px;text-align:center;font-size:13px}
+.install-banner{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--accent);padding:13px 16px;display:flex;align-items:center;gap:11px;z-index:9999;transform:translateY(100%);transition:transform .4s cubic-bezier(.34,1.56,.64,1)}
+.install-banner.visible{transform:translateY(0)}.ib-text{flex:1}.ib-title{font-size:13px;font-weight:700}.ib-sub{font-size:11px;color:var(--muted)}
+.ib-btns{display:flex;gap:7px}
+.btn-inst{background:var(--accent);color:#000;border:none;border-radius:8px;padding:7px 13px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Space Mono',monospace}
+.btn-dism{background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:8px;padding:7px 9px;font-size:12px;cursor:pointer}
+.ios-sheet{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:2px solid var(--accent);padding:18px 16px 32px;z-index:9999;transform:translateY(100%);transition:transform .4s cubic-bezier(.34,1.56,.64,1);border-radius:20px 20px 0 0}
+.ios-sheet.visible{transform:translateY(0)}.ios-title{font-size:14px;font-weight:700;margin-bottom:14px}
+.ios-step{display:flex;align-items:center;gap:9px;margin-bottom:11px;font-size:12px;color:var(--muted)}.ios-step b{color:var(--text)}
+.ios-close{width:100%;margin-top:8px;background:var(--surface2);color:var(--muted);border:1px solid var(--border);border-radius:10px;padding:11px;font-size:13px;cursor:pointer}
+.toast{position:fixed;bottom:76px;left:50%;transform:translateX(-50%) translateY(16px);background:var(--surface);border:1px solid var(--accent);color:var(--accent);padding:9px 16px;border-radius:9px;font-size:12px;font-family:'Space Mono',monospace;z-index:9998;opacity:0;transition:all .3s;pointer-events:none;white-space:nowrap}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.spinner{width:18px;height:18px;border:2px solid rgba(0,229,255,.2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;display:inline-block;vertical-align:middle;margin-right:7px}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Route<span>Trace</span></div>
+  <div class="hstats" id="hstats"><span>— pts</span><span>— paradas</span></div>
+</header>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('upload')"><span class="ti">📂</span>Subir</div>
+  <div class="tab" onclick="switchTab('map')"><span class="ti">🗺️</span>Mapa</div>
+  <div class="tab" onclick="switchTab('stops')"><span class="ti">📍</span>Paradas</div>
+</div>
+
+<div class="panel upload-panel active" id="panel-upload">
+  <div class="drop-zone" id="dropZone" onclick="document.getElementById('fi').click()">
+    <div class="di">📊</div>
+    <div class="dt">Sube tu archivo de coordenadas</div>
+    <div class="ds">Arrastra aquí o toca para seleccionar</div>
+    <div class="dh">.xlsx · .xls · .csv</div>
+  </div>
+  <input type="file" id="fi" accept=".xlsx,.xls,.csv" onchange="handleFile(event)">
+
+  <div id="fileInfoCard" style="display:none" class="file-info">
+    <div class="fi-icon">📋</div>
+    <div><div class="fi-name" id="fileName">—</div><div class="fi-meta" id="fileMeta">—</div></div>
+  </div>
+
+  <div id="mapperCard" class="mapper-card" style="display:none">
+    <div id="detectInfo" class="detect-info"></div>
+    <div class="mt">📍 Coordenadas</div>
+    <div class="mgrid">
+      <div class="fg"><label>LATITUD / COORD</label><select id="colLat"></select></div>
+      <div class="fg"><label>LONGITUD</label><select id="colLon"></select></div>
+    </div>
+    <div class="mt">🕐 Fecha y hora (opcional)</div>
+    <div class="mgrid">
+      <div class="fg"><label>FECHA / DATETIME</label><select id="colDate"></select></div>
+      <div class="fg"><label>HORA (si separada)</label><select id="colHour"></select></div>
+    </div>
+    <div class="mt">🚗 Otros (opcional)</div>
+    <div class="mgrid">
+      <div class="fg"><label>VELOCIDAD</label><select id="colSpeed"></select></div>
+      <div class="fg"><label>VIAJE / TRIP ID</label><select id="colTrip"></select></div>
+    </div>
+    <div class="fg" id="tripFilterWrap" style="display:none;margin-top:8px">
+      <label>FILTRAR POR VIAJE</label>
+      <select id="tripFilter"></select>
+    </div>
+    <div class="mt">🎛️ Detección de paradas</div>
+    <div class="mgrid">
+      <div class="fg"><label>RADIO (metros)</label><input type="number" id="stopRadius" value="150" min="20" max="1000"></div>
+      <div class="fg"><label>VENTANA (minutos)</label><input type="number" id="stopWindow" value="5" min="1" max="60"></div>
+      <div class="fg"><label>PUNTOS MÍNIMOS</label><input type="number" id="stopMinPts" value="5" min="2" max="100"></div>
+    </div>
+  </div>
+
+  <button class="btn-primary" id="processBtn" onclick="processData()" disabled>
+    Generar ruta en el mapa
+  </button>
+</div>
+
+<div class="panel map-panel" id="panel-map">
+  <div class="map-empty" id="mapEmpty">
+    <div class="map-empty-icon">🗺️</div>
+    <div class="map-empty-text">Sube un archivo para ver la ruta sobre el mapa real</div>
+  </div>
+  <div id="map" style="display:none"></div>
+  <div class="map-info-bar" id="mapInfoBar" style="display:none">
+    <b id="mapPts">0</b> pts · <b id="mapStops">0</b> paradas
+  </div>
+</div>
+
+<div class="panel stops-panel" id="panel-stops">
+  <div class="empty-state" id="stopsEmpty"><div style="font-size:38px;opacity:.35">📍</div><div>Sube un archivo para ver las paradas</div></div>
+  <div id="stopsSummary" class="stops-summary" style="display:none">
+    <div class="sc"><div class="sv" id="sPts">0</div><div class="sl">Puntos GPS</div></div>
+    <div class="sc"><div class="sv" id="sParadas">0</div><div class="sl">Paradas</div></div>
+    <div class="sc"><div class="sv" id="sDist">0</div><div class="sl">Km totales</div></div>
+  </div>
+  <div id="stopsList"></div>
+</div>
+
+<div class="install-banner" id="installBanner">
+  <div style="font-size:26px">🗺️</div>
+  <div class="ib-text"><div class="ib-title">Instalar RouteTrace</div><div class="ib-sub">Añadir a pantalla de inicio</div></div>
+  <div class="ib-btns">
+    <button class="btn-dism" onclick="dismissInstall()">✕</button>
+    <button class="btn-inst" onclick="triggerInstall()">Instalar</button>
+  </div>
+</div>
+<div class="ios-sheet" id="iosSheet">
+  <div class="ios-title">📲 Instalar en iPhone / iPad</div>
+  <div class="ios-step"><span style="font-size:18px">1️⃣</span><span>Toca el botón <b>Compartir ⎙</b> en Safari</span></div>
+  <div class="ios-step"><span style="font-size:18px">2️⃣</span><span>Toca <b>"Añadir a pantalla de inicio"</b></span></div>
+  <div class="ios-step"><span style="font-size:18px">3️⃣</span><span>Toca <b>Añadir</b></span></div>
+  <button class="ios-close" onclick="document.getElementById('iosSheet').classList.remove('visible')">Entendido</button>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+let rawData=[], routePoints=[], detectedStops=[], leafletMap=null;
+
+// ── Tabs ──
+function switchTab(id) {
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',['upload','map','stops'][i]===id));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('panel-'+id).classList.add('active');
+  if(id==='map'&&leafletMap) setTimeout(()=>leafletMap.invalidateSize(),80);
+}
+
+// ── Drag & drop ──
+const dz=document.getElementById('dropZone');
+dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('drag-over')});
+dz.addEventListener('dragleave',()=>dz.classList.remove('drag-over'));
+dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('drag-over');if(e.dataTransfer.files[0])processFile(e.dataTransfer.files[0])});
+function handleFile(e){if(e.target.files[0])processFile(e.target.files[0])}
+
+// ── Normaliza número con puntos extra: "38.025.368" → "38.025368" ──
+function fixNumStr(s) {
+  s=String(s).trim();
+  const neg=s.startsWith('-');
+  const abs=neg?s.slice(1):s;
+  const parts=abs.split('.');
+  if(parts.length>2) s=(neg?'-':'')+parts[0]+'.'+parts.slice(1).join('');
+  return s.replace(',','.');
+}
+
+// ════════════════════════════════════════════
+// MOTOR DE DETECCIÓN INTELIGENTE v3
+// Analiza el contenido real de cada columna.
+// Acepta cualquier orden, idioma, formato.
+// ════════════════════════════════════════════
+
+// Analiza una muestra de valores de una columna y devuelve su tipo
+function classifyColumn(col, rows) {
+  const sample = rows.slice(0,50).map(r=>String(r[col]??'').trim()).filter(v=>v&&v!=='-'&&v!=='null'&&v!=='undefined');
+  if(!sample.length) return 'unknown';
+  let scores = {coordPair:0, lat:0, lon:0, datetime:0, date:0, time:0, speed:0, ignore:0};
+
+  for(const v of sample) {
+    // 1. URL → ignorar siempre primero
+    if(/https?:\/\/|maps\.google|openstreetmap|www\./i.test(v)) { scores.ignore+=3; continue; }
+    // 2. Texto alfanumérico (matrículas, nombres) → ignorar
+    if(/[a-zA-Z]/.test(v)) { scores.ignore+=2; continue; }
+    // 3. Coordenada combinada: dos números separados por coma/punto y coma
+    if(/^-?[\d.]+\s*[,;]\s*-?[\d.]+$/.test(v)) { scores.coordPair+=3; continue; }
+    // 4. Datetime completo
+    if(/\d{4}[-/]\d{2}[-/]\d{2}.{0,5}\d{2}:\d{2}/.test(v) || /\d{2}[-/]\d{2}[-/]\d{4}.{0,5}\d{2}:\d{2}/.test(v)) { scores.datetime+=3; continue; }
+    // 5. Solo fecha
+    if(/^\d{4}[-/]\d{2}[-/]\d{2}$/.test(v) || /^\d{2}[-/]\d{2}[-/]\d{4}$/.test(v)) { scores.date+=3; continue; }
+    // 6. Solo hora HH:MM o HH:MM:SS
+    if(/^\d{1,2}:\d{2}(:\d{2})?$/.test(v)) { scores.time+=3; continue; }
+    // 7. Número puro — clasificar por rango
+    if(/^-?[\d.]+$/.test(v)) {
+      const n = parseFloat(fixNumStr(v));
+      if(isNaN(n)) { scores.ignore++; continue; }
+      // Entero sin decimales → ID/índice, no coordenada
+      if(!v.includes('.') && Number.isInteger(n)) { scores.ignore+=2; continue; }
+      // Necesita decimales para ser coordenada
+      if(v.includes('.')) {
+        if(n>=-90  && n<=90)  scores.lat+=2;
+        if(n>=-180 && n<=180) scores.lon+=2;
+        if(n<-90   || n>90)  { scores.lon+=2; scores.lat=Math.max(0,scores.lat-2); }
+      }
+      continue;
+    }
+    // 8. Velocidad: número + unidad (solo si tiene unidad explícita)
+    if(/\d\s*(km\/h|kmh|mph|kn|m\/s)/i.test(v)) { scores.speed+=3; continue; }
+  }
+
+  // Desambiguación lat vs lon por rango real
+  if(scores.lat>0 || scores.lon>0) {
+    const nums = sample.map(v=>parseFloat(fixNumStr(v))).filter(n=>!isNaN(n)&&isFinite(n));
+    if(nums.length) {
+      const mn=Math.min(...nums), mx=Math.max(...nums);
+      if(mn<-90||mx>90) { scores.lon=Math.max(scores.lon,scores.lat+3); scores.lat=0; }
+      else if(mx<=90&&mn>=-90) { scores.lat+=2; }
+    }
+  }
+
+  // Velocidad no puede ganar si hay señal de coordenada
+  if(scores.speed>0&&(scores.lat>0||scores.lon>0)) scores.speed=0;
+
+  const best=Object.entries(scores).sort((a,b)=>b[1]-a[1])[0];
+  if(best[1]===0) return 'unknown';
+  return best[0];
+}
+
+// Detecta fila de cabecera buscando la primera fila con ≥2 celdas texto no-numéricas
+function findHeaderRow(aoa) {
+  const KW=/coord|posic|ubicac|gps|lat|lon|lng|hora|fecha|time|date|veloc|speed|trip|plate|vehicle|address/i;
+  for(let r=0;r<Math.min(aoa.length,20);r++){
+    const row=(aoa[r]||[]).filter(v=>v!=null&&String(v).trim()!=='');
+    if(row.length<2) continue;
+    const textCells=row.filter(v=>typeof v==='string'&&isNaN(parseFloat(v)));
+    const hasKeyword=row.some(v=>KW.test(String(v)));
+    if(hasKeyword||(textCells.length>=2&&textCells.every(v=>v.length<60))) return r;
+  }
+  return 0;
+}
+
+// ── Cargar archivo ──
+function processFile(file) {
+  const ext=file.name.split('.').pop().toLowerCase();
+  if(!['xlsx','xls','csv'].includes(ext)){showToast('⚠️ Formato no soportado');return}
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    try{
+      const wb=XLSX.read(ev.target.result,{type:'array',cellDates:true});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+
+      // Detect CSV separator — if first sheet has only 1 column, try semicolon
+      let aoa=XLSX.utils.sheet_to_json(ws,{header:1,defval:null});
+      const firstRow=(aoa[0]||[]).filter(v=>v!=null);
+      if(firstRow.length===1 && typeof firstRow[0]==='string' && firstRow[0].includes(';')) {
+        // Re-parse with semicolon separator
+        const text=ev.target.result instanceof ArrayBuffer
+          ? new TextDecoder().decode(ev.target.result)
+          : ev.target.result;
+        const wbSemi=XLSX.read(text.replace(/;/g,','),{type:'string',cellDates:true});
+        const wsSemi=wbSemi.Sheets[wbSemi.SheetNames[0]];
+        aoa=XLSX.utils.sheet_to_json(wsSemi,{header:1,defval:null});
+        const hr=findHeaderRow(aoa);
+        rawData=XLSX.utils.sheet_to_json(wsSemi,{defval:'',range:hr});
+      } else {
+        const hr=findHeaderRow(aoa);
+        rawData=XLSX.utils.sheet_to_json(ws,{defval:'',range:hr});
+      }
+
+      rawData=rawData.filter(row=>Object.values(row).some(v=>v!==''&&v!==null&&v!==undefined));
+      if(!rawData.length){showToast('⚠️ Sin datos válidos');return}
+      document.getElementById('fileInfoCard').style.display='flex';
+      document.getElementById('fileName').textContent=file.name;
+      document.getElementById('fileMeta').textContent=`${rawData.length} filas · ${Object.keys(rawData[0]).length} columnas`;
+      autoDetectAndPopulate(Object.keys(rawData[0]));
+      document.getElementById('mapperCard').style.display='block';
+      document.getElementById('processBtn').disabled=false;
+      showToast('✅ '+rawData.length+' filas cargadas');
+    }catch(err){console.error(err);showToast('❌ Error al leer el archivo')}
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ── Auto-detección basada en contenido ──
+function autoDetectAndPopulate(cols) {
+  // Clasificar cada columna por contenido real
+  const types={};
+  for(const c of cols) types[c]=classifyColumn(c,rawData);
+
+  // Asignar columnas por tipo detectado (primera coincidencia)
+  const get=(t)=>cols.find(c=>types[c]===t)||null;
+
+  let coordPairCol = get('coordPair');
+  let latCol       = get('lat');
+  let lonCol       = get('lon');
+  const datetimeCol= get('datetime');
+  const dateCol    = get('date');
+  const timeCol    = get('time');
+  const speedCol   = get('speed');
+
+  // Si hay columna combinada, lat/lon separadas quedan en segundo plano
+  // Si no hay combinada pero tampoco lat/lon detectadas por contenido,
+  // intentar por nombre de columna como fallback
+  if(!coordPairCol && (!latCol||!lonCol)) {
+    const lc=cols.map(c=>c.toLowerCase());
+    const byName=(...kws)=>cols[lc.findIndex(c=>kws.some(k=>c.includes(k)))]||null;
+    if(!latCol)  latCol  = byName('latit','latitud','latitude','lat');
+    if(!lonCol)  lonCol  = byName('longi','longitud','longitude','lng','lon');
+    if(!coordPairCol) coordPairCol = byName('coord','posic','ubicac','gps','latlng','latlon');
+  }
+
+  // Construir opciones de select
+  const none='<option value="">— ninguna —</option>';
+  // Solo mostrar columnas relevantes (excluir las de tipo 'ignore' y 'unknown' con nombres sospechosos)
+  const IGNORE_NAMES=/url|link|href|address|direccion|dirección|plate|matricula|matricula|id$|trip/i;
+  const relevantCols=cols.filter(c=>types[c]!=='ignore'&&!(types[c]==='unknown'&&IGNORE_NAMES.test(c)));
+  const allOpts=cols.map(c=>`<option value="${c}">${c} [${types[c]}]</option>`).join('');
+  const relOpts=relevantCols.map(c=>`<option value="${c}">${c}</option>`).join('');
+
+  // Coordenadas
+  const combOpt=coordPairCol?`<option value="__c__:${coordPairCol}">📍 ${coordPairCol} (lat,lon juntos)</option>`:'';
+  document.getElementById('colLat').innerHTML=combOpt+allOpts;
+  document.getElementById('colLon').innerHTML=(coordPairCol?'<option value="__skip__">— incluida arriba —</option>':'')+allOpts;
+
+  if(coordPairCol){
+    document.getElementById('colLat').value=`__c__:${coordPairCol}`;
+    document.getElementById('colLon').value='__skip__';
+  } else {
+    if(latCol) document.getElementById('colLat').value=latCol;
+    if(lonCol) document.getElementById('colLon').value=lonCol;
+  }
+
+  // Fecha / hora
+  document.getElementById('colDate').innerHTML=none+allOpts;
+  document.getElementById('colHour').innerHTML=none+allOpts;
+  if(datetimeCol) document.getElementById('colDate').value=datetimeCol;
+  else if(dateCol) document.getElementById('colDate').value=dateCol;
+  else if(timeCol) document.getElementById('colDate').value=timeCol;
+  if(timeCol && timeCol!==document.getElementById('colDate').value)
+    document.getElementById('colHour').value=timeCol;
+
+  // Speed — fallback por nombre si no detectado por contenido
+  const speedByName = cols.find(c=>/veloc|speed|^vel$|kmh|km_h/i.test(c));
+  document.getElementById('colSpeed').innerHTML=none+allOpts;
+  if(speedCol) document.getElementById('colSpeed').value=speedCol;
+  else if(speedByName) document.getElementById('colSpeed').value=speedByName;
+
+  // Trip ID — columna con pocos valores únicos enteros (viajes)
+  const tripCol = cols.find(c => {
+    if(types[c]==='ignore') return false;
+    const vals = rawData.slice(0,50).map(r=>r[c]).filter(v=>v!==''&&v!=null);
+    const uniq = [...new Set(vals)];
+    return uniq.length >= 2 && uniq.length <= 50 && uniq.every(v=>!isNaN(parseInt(v)));
+  }) || null;
+  document.getElementById('colTrip').innerHTML=none+allOpts;
+  if(tripCol) document.getElementById('colTrip').value=tripCol;
+  updateTripFilter();
+
+  // Resumen de lo detectado
+  const msgs=[];
+  if(coordPairCol) msgs.push(`📍 Coord. combinadas: <b>${coordPairCol}</b>`);
+  else if(latCol&&lonCol) msgs.push(`📍 Lat: <b>${latCol}</b> · Lon: <b>${lonCol}</b>`);
+  else msgs.push(`⚠️ Coordenadas no detectadas — selecciónalas manualmente`);
+  if(datetimeCol) msgs.push(`🕐 Datetime: <b>${datetimeCol}</b>`);
+  else if(dateCol&&timeCol) msgs.push(`🕐 Fecha: <b>${dateCol}</b> + Hora: <b>${timeCol}</b>`);
+  else if(dateCol||timeCol) msgs.push(`🕐 Tiempo: <b>${dateCol||timeCol}</b>`);
+  if(speedCol) msgs.push(`🚗 Velocidad: <b>${speedCol}</b>`);
+  // Columnas ignoradas
+  const ignored=cols.filter(c=>types[c]==='ignore'||(types[c]==='unknown'&&IGNORE_NAMES.test(c)));
+  if(ignored.length) msgs.push(`🚫 Ignoradas: ${ignored.map(c=>`<b>${c}</b>`).join(', ')}`);
+  document.getElementById('detectInfo').innerHTML=msgs.join('<br>');
+}
+
+// ── Parseo de par de coordenadas ──
+// Acepta: "38.97, -0.17" | "38,97; -0,17" | "38.97 -0.17" | lon,lat o lat,lon | puntos extra
+function parseCoordPair(val) {
+  const s=String(val).trim();
+  const m=s.match(/^(-?[\d.,]+)\s*[,;\s]\s*(-?[\d.,]+)$/);
+  if(!m) return [NaN,NaN];
+  let a=parseFloat(fixNumStr(m[1])), b=parseFloat(fixNumStr(m[2]));
+  if(Math.abs(a)>90&&Math.abs(b)<=90)[a,b]=[b,a];
+  return [a,b];
+}
+
+// ── Parseo de fecha/hora ──
+function parseDateTime(dv,hv) {
+  if(!dv&&!hv) return null;
+  if(dv instanceof Date){
+    if(hv instanceof Date) dv.setHours(hv.getHours(),hv.getMinutes(),hv.getSeconds());
+    else if(hv){const m=String(hv).match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);if(m)dv.setHours(+m[1],+m[2],+(m[3]||0))}
+    return isNaN(dv.getTime())?null:new Date(dv);
+  }
+  if(typeof dv==='number') return new Date((dv-25569)*86400000);
+  const combined=hv?`${String(dv).trim()} ${String(hv).trim()}`:String(dv).trim();
+  // Intentar parsear varios formatos
+  let d=new Date(combined);
+  if(!isNaN(d.getTime())) return d;
+  // dd/mm/yyyy → yyyy-mm-dd
+  const fix=combined.replace(/^(\d{2})\/(\d{2})\/(\d{4})/,'$3-$2-$1');
+  d=new Date(fix); if(!isNaN(d.getTime())) return d;
+  return null;
+}
+
+// ── Trip filter UI ──
+function updateTripFilter() {
+  const tripCol = document.getElementById('colTrip').value;
+  const wrap = document.getElementById('tripFilterWrap');
+  const sel = document.getElementById('tripFilter');
+  if(!tripCol){wrap.style.display='none';return}
+  const vals = [...new Set(rawData.map(r=>r[tripCol]).filter(v=>v!==''&&v!=null))].sort((a,b)=>a-b);
+  if(vals.length<2){wrap.style.display='none';return}
+  wrap.style.display='block';
+  sel.innerHTML='<option value="">— Todos los viajes —</option>'+vals.map(v=>`<option value="${v}">Viaje ${v}</option>`).join('');
+}
+document.addEventListener('change', e=>{ if(e.target.id==='colTrip') updateTripFilter(); });
+
+// ── Procesar datos ──
+function processData() {
+  const latCol=document.getElementById('colLat').value;
+  if(!latCol){showToast('⚠️ Selecciona columna de coordenadas');return}
+  const lonCol  =document.getElementById('colLon').value;
+  const dateCol =document.getElementById('colDate').value;
+  const hourCol =document.getElementById('colHour').value;
+  const spdCol  =document.getElementById('colSpeed').value;
+  const tripCol =document.getElementById('colTrip').value;
+  const tripFilter=document.getElementById('tripFilter').value;
+    const radius   = parseFloat(document.getElementById('stopRadius').value)||150;
+    const windowSecs = parseFloat(document.getElementById('stopWindow').value)*60||300;
+    const minPts   = parseInt(document.getElementById('stopMinPts').value)||5;
+
+  const btn=document.getElementById('processBtn');
+  btn.innerHTML='<span class="spinner"></span>Procesando...';btn.disabled=true;
+
+  setTimeout(()=>{
+    const isComb=latCol.startsWith('__c__:');
+    const combCol=isComb?latCol.replace('__c__:',''):null;
+    const sourceData = (tripCol && tripFilter)
+      ? rawData.filter(row=>String(row[tripCol])===String(tripFilter))
+      : rawData;
+
+    routePoints=sourceData.map(row=>{
+      let lat,lon;
+      if(isComb){
+        [lat,lon]=parseCoordPair(row[combCol]);
+      } else {
+        lat=parseFloat(fixNumStr(row[latCol]||''));
+        lon=parseFloat(fixNumStr(row[lonCol]||''));
+        if(!isNaN(lat)&&!isNaN(lon)&&Math.abs(lat)>90&&Math.abs(lon)<=90)[lat,lon]=[lon,lat];
+      }
+      const timeObj=parseDateTime(dateCol?row[dateCol]:null,hourCol?row[hourCol]:null);
+      const time=timeObj?timeObj.toLocaleString('es-ES',{dateStyle:'short',timeStyle:'medium'}):null;
+      let speed=null;
+      if(spdCol) speed=parseFloat(String(row[spdCol]||'').replace(/[^\d.,-]/g,'').replace(',','.'));
+      return{lat,lon,timeObj,time,speed};
+    }).filter(p=>!isNaN(p.lat)&&!isNaN(p.lon)&&Math.abs(p.lat)<=90&&Math.abs(p.lon)<=180);
+
+    if(routePoints.length<2){showToast('⚠️ No se encontraron coordenadas válidas');btn.innerHTML='Generar ruta en el mapa';btn.disabled=false;return}
+
+    // Ordenar por tiempo si hay timestamps
+    if(routePoints[0].timeObj) routePoints.sort((a,b)=>a.timeObj-b.timeObj);
+
+    detectedStops=detectStops(routePoints,radius,windowSecs,minPts);
+    document.getElementById('hstats').innerHTML=`<span><b>${routePoints.length}</b> pts</span><span><b>${detectedStops.length}</b> paradas</span>`;
+    renderStopsPanel();
+    initMap();
+    btn.innerHTML='✅ Ruta generada';
+    setTimeout(()=>{btn.innerHTML='Generar ruta en el mapa';btn.disabled=false},2000);
+    showToast(`✅ ${routePoints.length} pts · ${detectedStops.length} paradas`);
+  },120);
+}
+
+// ── Haversine ──
+function hav(la1,lo1,la2,lo2){
+  const R=6371000,dL=(la2-la1)*Math.PI/180,dO=(lo2-lo1)*Math.PI/180;
+  const a=Math.sin(dL/2)**2+Math.cos(la1*Math.PI/180)*Math.cos(la2*Math.PI/180)*Math.sin(dO/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+// ── Stop detection — ventana temporal deslizante ──
+// Para cada punto i, recoge todos los puntos dentro de [i, i+windowSecs].
+// Si todos caben en un radio ≤ radiusM Y hay ≥ minPts puntos → parada.
+// La parada se registra en el centroide. Avanza al último punto de la ventana.
+function detectStops(pts, radiusM, windowSecs, minPts) {
+  const stops = [];
+  const hasTime = pts.length > 1 && pts[0].timeObj && pts[1].timeObj;
+
+  // Estimar segundos por punto si no hay timestamps reales
+  let spp = 6;
+  if(hasTime && pts.length > 1) {
+    const diffs = [];
+    for(let k=1; k<Math.min(pts.length,30); k++) {
+      const d = Math.abs(pts[k].timeObj - pts[k-1].timeObj) / 1000;
+      if(d > 0 && d < 600) diffs.push(d);
+    }
+    if(diffs.length) spp = diffs.reduce((a,b)=>a+b,0)/diffs.length;
+  }
+
+  let i = 0;
+  while(i < pts.length) {
+    // Construir ventana: todos los puntos dentro de windowSecs desde pts[i]
+    const t0 = pts[i].timeObj ? pts[i].timeObj.getTime() : i * spp * 1000;
+    const window = [i];
+    let j = i + 1;
+    while(j < pts.length) {
+      const tj = pts[j].timeObj ? pts[j].timeObj.getTime() : j * spp * 1000;
+      if((tj - t0) / 1000 > windowSecs) break;
+      window.push(j);
+      j++;
+    }
+
+    // ¿Suficientes puntos en la ventana?
+    if(window.length >= minPts) {
+      // Calcular centroide
+      const lats = window.map(k=>pts[k].lat);
+      const lons = window.map(k=>pts[k].lon);
+      const cLat = lats.reduce((a,b)=>a+b,0)/lats.length;
+      const cLon = lons.reduce((a,b)=>a+b,0)/lons.length;
+      // Comprobar que TODOS los puntos están dentro del radio
+      const maxDist = Math.max(...window.map(k=>hav(cLat,cLon,pts[k].lat,pts[k].lon)));
+      if(maxDist <= radiusM) {
+        const tEnd = pts[window[window.length-1]];
+        const durMs = tEnd.timeObj && pts[i].timeObj
+          ? Math.abs(tEnd.timeObj - pts[i].timeObj)
+          : window.length * spp * 1000;
+        const durMins = Math.round(durMs / 60000);
+        stops.push({
+          lat: cLat, lon: cLon,
+          n: window.length,
+          dur: durMins,
+          radiusM: Math.round(maxDist),
+          tStart: pts[i].time,
+          tEnd: tEnd.time
+        });
+        i = window[window.length-1] + 1;
+        continue;
+      }
+    }
+    i++;
+  }
+  return stops;
+}
+
+function totalKm(pts){let d=0;for(let i=1;i<pts.length;i++)d+=hav(pts[i-1].lat,pts[i-1].lon,pts[i].lat,pts[i].lon);return(d/1000).toFixed(1)}
+
+// ── Leaflet map ──
+function initMap(){
+  document.getElementById('mapEmpty').style.display='none';
+  const mapDiv=document.getElementById('map');
+  mapDiv.style.display='block';
+  document.getElementById('mapInfoBar').style.display='block';
+  document.getElementById('mapPts').textContent=routePoints.length;
+  document.getElementById('mapStops').textContent=detectedStops.length;
+  switchTab('map');
+
+  setTimeout(()=>{
+    if(leafletMap){leafletMap.remove();leafletMap=null}
+
+    leafletMap=L.map('map',{zoomControl:true,attributionControl:true});
+
+    // Multiple tile providers — fallback if one fails
+    const tileLayers = [
+      { url:'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', attr:'© OpenStreetMap' },
+      { url:'https://tile.openstreetmap.de/{z}/{x}/{y}.png', attr:'© OpenStreetMap DE' },
+      { url:'https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png', attr:'© Stadia Maps' },
+    ];
+    let tileLoaded=false;
+    for(const t of tileLayers){
+      const layer=L.tileLayer(t.url,{maxZoom:19,attribution:t.attr,crossOrigin:true});
+      layer.on('tilerror',()=>{ if(!tileLoaded) tryNextTile(); });
+      layer.on('load',()=>{ tileLoaded=true; });
+      layer.addTo(leafletMap);
+      break; // Try first, errors handled gracefully
+    }
+
+    // Route
+    const latlngs=routePoints.map(p=>[p.lat,p.lon]);
+    const poly=L.polyline(latlngs,{color:'#00e5ff',weight:3,opacity:.85}).addTo(leafletMap);
+
+    // Start marker
+    L.circleMarker([routePoints[0].lat,routePoints[0].lon],{radius:9,fillColor:'#7cfc00',color:'#fff',weight:2,fillOpacity:1})
+      .bindTooltip('<b>Inicio</b>',{sticky:true}).addTo(leafletMap);
+
+    // End marker
+    const last=routePoints[routePoints.length-1];
+    L.circleMarker([last.lat,last.lon],{radius:9,fillColor:'#ff3366',color:'#fff',weight:2,fillOpacity:1})
+      .bindTooltip('<b>Fin</b>',{sticky:true}).addTo(leafletMap);
+
+    // Stop markers
+    detectedStops.forEach((s,i)=>{
+      const icon=L.divIcon({
+        html:`<div style="width:26px;height:26px;background:#ff6b35;border:2px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:monospace;font-size:11px;font-weight:700;color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.5)">${i+1}</div>`,
+        className:'',iconSize:[26,26],iconAnchor:[13,13]
+      });
+      const popup=`<div class="popup-title">Parada #${i+1}</div>
+        <div class="popup-row">📍 ${s.lat.toFixed(5)}, ${s.lon.toFixed(5)}</div>
+        ${s.dur?`<div class="popup-row">⏱️ <b>~${s.dur} min</b></div>`:''}
+        ${s.radiusM?`<div class="popup-row">📐 Radio: <b>${s.radiusM} m</b></div>`:''}
+        ${s.tStart?`<div class="popup-row">🕐 Inicio: <b>${s.tStart}</b></div>`:''}
+        ${s.tEnd&&s.tEnd!==s.tStart?`<div class="popup-row">🏁 Fin: <b>${s.tEnd}</b></div>`:''}
+        <div class="popup-row">📊 ${s.n} puntos GPS</div>`;
+      L.marker([s.lat,s.lon],{icon}).bindPopup(popup).addTo(leafletMap);
+    });
+
+    leafletMap.fitBounds(poly.getBounds(),{padding:[40,40]});
+  },200);
+}
+
+// ── Stops panel ──
+function renderStopsPanel(){
+  document.getElementById('stopsEmpty').style.display='none';
+  document.getElementById('stopsSummary').style.display='grid';
+  document.getElementById('sPts').textContent=routePoints.length;
+  document.getElementById('sParadas').textContent=detectedStops.length;
+  document.getElementById('sDist').textContent=totalKm(routePoints);
+  const list=document.getElementById('stopsList');
+  list.innerHTML='';
+  if(!detectedStops.length){list.innerHTML='<div class="empty-state"><div style="font-size:32px">🟢</div><div>No se detectaron paradas con estos parámetros</div></div>';return}
+  detectedStops.forEach((s,i)=>{
+    const c=document.createElement('div');
+    c.className='stop-card';c.style.animationDelay=(i*.04)+'s';
+    c.innerHTML=`<div class="snum">${i+1}</div>
+      <div class="sinfo">
+        <div class="scoords">${s.lat.toFixed(5)}, ${s.lon.toFixed(5)}</div>
+        <div class="smeta">
+          ${s.dur?`<span>~<b>${s.dur} min</b></span>`:''}
+          <span>${s.n} pts</span>
+          ${s.tStart?`<span><b>${s.tStart}</b></span>`:''}
+        </div>
+      </div>
+      <div class="sbadge">PARADA</div>`;
+    c.onclick=()=>{switchTab('map');setTimeout(()=>{if(leafletMap)leafletMap.setView([s.lat,s.lon],17)},200)};
+    list.appendChild(c);
+  });
+}
+
+// ── Toast ──
+function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800)}
+
+// ── PWA ──
+let deferredPrompt=null;
+const isIOS=/iphone|ipad|ipod/i.test(navigator.userAgent)&&!window.MSStream;
+const isStandalone=window.matchMedia('(display-mode: standalone)').matches||navigator.standalone;
+if(!isStandalone){
+  if(isIOS)setTimeout(()=>document.getElementById('iosSheet').classList.add('visible'),3000);
+  else window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;setTimeout(()=>document.getElementById('installBanner').classList.add('visible'),2000)});
+}
+async function triggerInstall(){if(!deferredPrompt)return;deferredPrompt.prompt();const{outcome}=await deferredPrompt.userChoice;deferredPrompt=null;document.getElementById('installBanner').classList.remove('visible');if(outcome==='accepted')showToast('✅ ¡App instalada!')}
+function dismissInstall(){document.getElementById('installBanner').classList.remove('visible')}
+window.addEventListener('appinstalled',()=>showToast('✅ RouteTrace instalada'));
+
+if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+</script>
+</body>
+</html>
